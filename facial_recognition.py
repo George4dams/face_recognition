@@ -8,7 +8,7 @@ import pickle
 from gpiozero import LED
 
 # Change to true to see output
-show = True
+show = False
 
 # Load pre-trained face encodings
 print("[INFO] loading encodings...")
@@ -24,6 +24,7 @@ picam2.start()
 
 # Initialize our variables
 cv_scaler = 4 # this has to be a whole number
+recognition_num = 3 # amount of times the system has to recognise someone before playing sound
 
 face_locations = []
 face_encodings = []
@@ -38,13 +39,16 @@ greetings = [
     "Slay ",
     "Have a great day ",
     "You're a champion ",
-    "Sup ",
-    "Boo ",
-    "Eat healthy ",
     "Fart "]
 
-unrecognised = "Intruder. Intruder. You are being recorded. Please exit the premises."
+unrecognised = "Intruder. Intruder. You are being recorded. "
 
+# Initialise dictionary to store number of times a person has been recorded
+name_counts = {"Unknown":0}
+
+for name in known_face_names:
+    if name not in name_counts:
+        name_counts.update({name:0})
 
 def process_frame(frame):
     global face_locations, face_encodings, face_names
@@ -71,20 +75,37 @@ def process_frame(frame):
         best_match_index = np.argmin(face_distances)
         if matches[best_match_index]:
             name = known_face_names[best_match_index]
-            # Check if the detected face is in our authorized list
-            print("recognised")
-            phrase = np.random.choice(greetings)
-            #if phrase == "Fart":
-            #print("fart")
-            #subprocess.run(['cvlc', 'sounds/fart.mp3'])
-            #else:
-            subprocess.run(["espeak-ng", "-ven+gb", "-s125", "-p40", phrase + name], check=True)
-        #else:
+            
+            #play_sound(name)
+            
+        else:
             subprocess.run(["espeak-ng", "-ven+gb", "-s125", "-p40", unrecognised], check=True)
         face_names.append(name)
     
-    
     return frame
+
+
+def play_sound(name):
+    #Plays sound
+    print("recognised")
+    
+    for key in name_counts:
+        if key == name:
+            name_counts[key] += 1
+        else:
+            name_counts[key] = 0
+    
+    if name_counts[name] >= recognition_num:
+        for key in name_counts:
+            name_counts[key] = 0
+        print(f"recognised {name}")
+        phrase = np.random.choice(greetings)
+        if phrase == "Fart ":
+            print("fart")
+            subprocess.run(['cvlc', '--play-and-exit', 'sounds/fart.mp3'])
+        else:
+            subprocess.run(["espeak-ng", "-ven+gb", "-s125", "-p40", phrase + name], check=True)
+
 
 def draw_results(frame):
     # Display the results
@@ -116,6 +137,12 @@ def calculate_fps():
         start_time = time.time()
     return fps
 
+minute = 60
+second = 1
+last_time = time.time() - second
+fps_list = []
+completed = False
+
 while True:
     # Capture a frame from camera
     frame = picam2.capture_array()
@@ -128,7 +155,19 @@ while True:
 
      # Calculate and update FPS
     current_fps = calculate_fps()
-
+    
+    if completed == False:
+        if time.time() - last_time >= second:
+            fps_list.append(current_fps)
+            last_time = time.time()
+            print(len(fps_list))
+        if len(fps_list) == 60:
+            completed = True
+            print("completed")
+            print(f"fps: \n{fps_list}")
+            print(f"average: \n{sum(fps_list)/len(fps_list)}")
+        
+    
     # Attach FPS counter to the text and boxes
     cv2.putText(display_frame, f"FPS: {current_fps:.1f}", (display_frame.shape[1] - 150, 30), 
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
@@ -146,4 +185,3 @@ while True:
 # By breaking the loop we run this code here which closes everything
 cv2.destroyAllWindows()
 picam2.stop()
-output.off()  # Make sure to turn off the GPIO pin when exiting
