@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Python script at startup
+After=network.target
+
+[Service]
+ExecStart=/home/george/Desktop/face_recognition/venv/bin/python3 /home/george/Desktop/face_recognition/facial_recognition.py
+WorkingDirectory=/home/george/Desktop/face_recognition
+User=george
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+
+[Install]
+WantedBy=multi-user.target
